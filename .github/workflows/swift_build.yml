@@ -6,10 +6,48 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26
+    name: "${{ matrix.os }} - Swift ${{ matrix.swift-version }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, ubuntu-24.04, ubuntu-22.04]
+        swift-version: [6.3, 6.4.x-snapshot]
+    env:
+      SWIFT_VERSION: ${{ matrix.swift-version }}
+    runs-on: ${{ matrix.os }}
     steps:
+    - name: Install swiftly
+      run: |
+        case "$RUNNER_OS" in
+          macOS)
+            curl -L https://download.swift.org/swiftly/darwin/swiftly.pkg > swiftly.pkg
+            installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
+            ~/.swiftly/bin/swiftly init -y --skip-install
+            . "$HOME/.swiftly/env.sh"
+            ;;
+          Linux)
+            sudo apt-get update
+            sudo apt-get install -y libcurl4-openssl-dev
+            if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
+              sudo apt-get install -y pkg-config python3-lldb-13
+            fi
+            curl -L https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz > swiftly.tar.gz
+            tar zxf swiftly.tar.gz
+            ./swiftly init -y --skip-install
+            . "$HOME/.local/share/swiftly/env.sh"
+            ;;
+          *)
+            echo "Unsupported OS: $RUNNER_OS"
+            exit 1
+            ;;
+        esac
+        echo "$(dirname $(which swiftly))" >> $GITHUB_PATH
     - uses: actions/checkout@v7
-    - name: Version
+    - name: Install the toolchain
+      run: |
+        swiftly install ${{ matrix.swift-version }} -u -y
+        swiftly link
+    - name: Version information
       run: swift --version
     - name: Build
       run: swift build -v
