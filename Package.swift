@@ -1,0 +1,23 @@
+// swift-tools-version: 6.3
+
+import PackageDescription
+
+let package = Package(
+    name: "SwiftPackageMultiSDKSupportPlayground",
+    products: [
+        .library(
+            name: "SwiftPackageMultiSDKSupportPlayground",
+            targets: ["SwiftPackageMultiSDKSupportPlayground"]
+        )
+    ],
+    targets: [
+        .target(
+            name: "SwiftPackageMultiSDKSupportPlayground"
+        ),
+        .testTarget(
+            name: "SwiftPackageMultiSDKSupportPlaygroundTests",
+            dependencies: ["SwiftPackageMultiSDKSupportPlayground"]
+        ),
+    ],
+    swiftLanguageModes: [.v6]
+)
