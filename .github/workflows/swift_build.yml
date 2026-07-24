@@ -1,0 +1,17 @@
+name: swift build & test
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+    - uses: actions/checkout@v7
+    - name: Version
+      run: swift --version
+    - name: Build
+      run: swift build -v
+    - name: Run tests
+      run: swift test -v
