@@ -6,24 +6,21 @@ on:
 
 jobs:
   build:
-    name: "${{ matrix.os }}"
+    name: "Xcode ${{ matrix.xcodeVersion }}"
     strategy:
       fail-fast: false
       matrix:
         os: [macos-26, xcode-27]
+        include:
+        - os: macos-26
+          xcodeVersion: "26.6"
+        - os: xcode-27
+          xcodeVersion: "27.0"
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v7
     - name: Set the Xcode version
-      run: |
-        case "${{ matrix.os }}" in
-          "macos-26")
-            xcodes select 26.6
-            ;;
-          "xcode-27")
-            xcodes select 27.0
-            ;;
-        esac
+      run: xcodes select ${{ matrix.xcodeVersion }}
     - name: Version information
       run: swift --version
     - name: List schemes

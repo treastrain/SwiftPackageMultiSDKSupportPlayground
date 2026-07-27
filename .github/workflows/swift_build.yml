@@ -6,12 +6,19 @@ on:
 
 jobs:
   build:
-    name: "${{ matrix.os }} - Swift ${{ matrix.swift-version }}"
+    name: "${{ matrix.osName }} - Swift ${{ matrix.swift-version }}"
     strategy:
       fail-fast: false
       matrix:
         os: [macos-26, ubuntu-24.04, ubuntu-22.04]
         swift-version: [6.3, 6.4.x-snapshot]
+        include:
+        - os: macos-26
+          osName: macOS 26
+        - os: ubuntu-24.04
+          osName: Ubuntu 24.04
+        - os: ubuntu-22.04
+          osName: Ubuntu 22.04
     env:
       SWIFT_VERSION: ${{ matrix.swift-version }}
     runs-on: ${{ matrix.os }}
