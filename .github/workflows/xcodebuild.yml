@@ -33,6 +33,14 @@ jobs:
         echo Using default scheme: $default
         echo "scheme=$default" >> $GITHUB_OUTPUT
     - name: Build for testing
-      run: xcodebuild build-for-testing -scheme "${{ steps.set-scheme.outputs.scheme }}" -destination "platform=macOS,arch=arm64"
+      run: |
+        build_settings=()
+        if [[ "${{ matrix.xcodeVersion }}" == 27.* ]]; then
+          build_settings+=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) OS_27')
+        fi
+        xcodebuild build-for-testing \
+          -scheme "${{ steps.set-scheme.outputs.scheme }}" \
+          -destination "platform=macOS,arch=arm64" \
+          "${build_settings[@]}"
     - name: Run tests
       run: xcodebuild test-without-building -scheme "${{ steps.set-scheme.outputs.scheme }}" -destination "platform=macOS,arch=arm64"
