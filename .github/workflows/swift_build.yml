@@ -10,8 +10,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, ubuntu-24.04, ubuntu-22.04]
+        os: [macos-26, ubuntu-24.04, ubuntu-22.04, windows-2022]
         swift-version: [6.3, 6.4.x-snapshot]
+        exclude:
+        - os: windows-2022
+          swift-version: 6.4.x-snapshot
         include:
         - os: macos-26
           osName: macOS 26
@@ -19,22 +22,29 @@ jobs:
           osName: Ubuntu 24.04
         - os: ubuntu-22.04
           osName: Ubuntu 22.04
+        - os: windows-2022
+          osName: Windows Server 2022
         - swift-version: 6.3
           traitArguments: ""
+          windowsToolchainURL: https://download.swift.org/swift-6.3-release/windows10/swift-6.3-RELEASE/swift-6.3-RELEASE-windows10.exe
         - swift-version: 6.4.x-snapshot
           traitArguments: --traits OS_27
     env:
       SWIFT_VERSION: ${{ matrix.swift-version }}
     runs-on: ${{ matrix.os }}
     steps:
-    - name: Install swiftly
+    - name: Install Swift toolchain on macOS and Linux
+      if: runner.os != 'Windows'
+      shell: bash
       run: |
         case "$RUNNER_OS" in
           macOS)
-            curl -L https://download.swift.org/swiftly/darwin/swiftly.pkg > swiftly.pkg
+            curl -fL https://download.swift.org/swiftly/darwin/swiftly.pkg -o swiftly.pkg
             installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
             ~/.swiftly/bin/swiftly init -y --skip-install
-            . "$HOME/.swiftly/env.sh"
+            ~/.swiftly/bin/swiftly install "${{ matrix.swift-version }}" -u -y
+            ~/.swiftly/bin/swiftly link
+            echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
             ;;
           Linux)
             sudo apt-get update
@@ -42,22 +52,54 @@ jobs:
             if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
               sudo apt-get install -y pkg-config python3-lldb-13
             fi
-            curl -L https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz > swiftly.tar.gz
+            curl -fL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o swiftly.tar.gz
             tar zxf swiftly.tar.gz
             ./swiftly init -y --skip-install
-            . "$HOME/.local/share/swiftly/env.sh"
+            ~/.local/share/swiftly/bin/swiftly install "${{ matrix.swift-version }}" -u -y
+            ~/.local/share/swiftly/bin/swiftly link
+            echo "$HOME/.local/share/swiftly/bin" >> "$GITHUB_PATH"
             ;;
           *)
             echo "Unsupported OS: $RUNNER_OS"
             exit 1
             ;;
         esac
-        echo "$(dirname $(which swiftly))" >> $GITHUB_PATH
-    - uses: actions/checkout@v7
-    - name: Install the toolchain
+    - name: Install Swift toolchain on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
       run: |
-        swiftly install ${{ matrix.swift-version }} -u -y
-        swiftly link
+        $ErrorActionPreference = "Stop"
+
+        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile vc_redist.x64.exe
+        $process = Start-Process -FilePath .\vc_redist.x64.exe -ArgumentList "/install", "/quiet", "/norestart" -Wait -PassThru
+        if ($process.ExitCode -notin 0, 1638, 3010) {
+          throw "Visual C++ Redistributable installer failed with exit code $($process.ExitCode)"
+        }
+
+        Invoke-WebRequest -Uri "${{ matrix.windowsToolchainURL }}" -OutFile swift-installer.exe
+        $process = Start-Process -FilePath .\swift-installer.exe -ArgumentList "/quiet", "/norestart" -Wait -PassThru
+        if ($process.ExitCode -notin 0, 3010) {
+          throw "Swift installer failed with exit code $($process.ExitCode)"
+        }
+
+        $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        ($machinePath, $userPath) -split ";" |
+          Where-Object { $_ } |
+          ForEach-Object { $_ >> $env:GITHUB_PATH }
+        [Environment]::GetEnvironmentVariables("User").GetEnumerator() |
+          Where-Object { $_.Key -ne "Path" } |
+          ForEach-Object { "$($_.Key)=$($_.Value)" >> $env:GITHUB_ENV }
+        $sdkRoot = [Environment]::GetEnvironmentVariable("SDKROOT", "User")
+        if (-not $sdkRoot) {
+          $sdkRoot = Get-ChildItem "$env:LOCALAPPDATA\Programs\Swift\Platforms" -Directory -Recurse -Filter Windows.sdk |
+            Select-Object -First 1 -ExpandProperty FullName
+        }
+        if (-not $sdkRoot) {
+          throw "Windows SDK installed by the Swift toolchain was not found"
+        }
+        "SDKROOT=$sdkRoot" >> $env:GITHUB_ENV
+    - uses: actions/checkout@v7
     - name: Version information
       run: swift --version
     - name: Build
