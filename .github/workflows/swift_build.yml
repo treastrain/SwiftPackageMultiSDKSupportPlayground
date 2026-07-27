@@ -126,6 +126,11 @@ jobs:
           build-option: ""
           release-checksum: 87c3eaf908e67c0e13a84367119e12273cec1d2cd3d81f7d74bb36722d6b607b
           beta-checksum: 2771036e478c0f9322a1735ce8baa3087ffa1d802ea4dd7ba564854300266bdd
+        - name: WebAssembly
+          bundle: wasm
+          build-option: ""
+          release-checksum: cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7
+          beta-checksum: 643c2932dbff596f5f74c77801d5f233ffd09f3fe2925b3f91606cd6d4b153b1
         - name: Android (x86_64)
           bundle: android
           sdk: x86_64-unknown-linux-android28
@@ -177,6 +182,9 @@ jobs:
           android)
             SDK_DIRECTORY="android-sdk"
             ;;
+          wasm)
+            SDK_DIRECTORY="wasm-sdk"
+            ;;
           *)
             echo "Unsupported SDK bundle: $BUNDLE"
             exit 1
@@ -197,6 +205,12 @@ jobs:
         BUNDLE_URL="${{ matrix.sdkBaseURL }}/${SDK_DIRECTORY}/${{ matrix.sdkRelease }}/${{ matrix.sdkRelease }}_${BUNDLE}.artifactbundle.tar.gz"
         swift sdk install "$BUNDLE_URL" --checksum "$CHECKSUM"
 
+        if [ "$BUNDLE" = "wasm" ]; then
+          echo "SWIFT_SDK=${{ matrix.sdkRelease }}_wasm" >> "$GITHUB_ENV"
+        else
+          echo "SWIFT_SDK=${{ matrix.target.sdk }}" >> "$GITHUB_ENV"
+        fi
+
         if [ "$BUNDLE" = "android" ]; then
           mkdir -p "$HOME/android-ndk"
           cd "$HOME/android-ndk"
@@ -213,4 +227,4 @@ jobs:
           ./swift-sdks/*_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
         fi
     - name: Build
-      run: swift build -v --swift-sdk ${{ matrix.target.sdk }} ${{ matrix.target.build-option }}
+      run: swift build -v --swift-sdk "$SWIFT_SDK" ${{ matrix.target.build-option }}
