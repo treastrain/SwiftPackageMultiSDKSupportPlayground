@@ -6,21 +6,43 @@ on:
 
 jobs:
   build:
-    name: "Xcode ${{ matrix.xcodeVersion }}"
+    name: "Xcode ${{ matrix.xcode.version }} / ${{ matrix.destination.name }}"
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, xcode-27]
-        include:
+        xcode:
         - os: macos-26
-          xcodeVersion: "26.6"
+          version: "26.6"
         - os: xcode-27
-          xcodeVersion: "27.0"
-    runs-on: ${{ matrix.os }}
+          version: "27.0"
+        destination:
+        - name: macOS
+          testDestination: "platform=macOS,arch=arm64"
+          testEnvironment: macOS
+        - name: Mac Catalyst
+          testDestination: "platform=macOS,arch=arm64,variant=Mac Catalyst"
+          testEnvironment: Mac Catalyst
+        - name: iOS
+          buildDestination: "generic/platform=iOS"
+          testDestination: "platform=iOS Simulator,name=iPhone Air,OS=latest"
+          testEnvironment: iOS Simulator
+        - name: tvOS
+          buildDestination: "generic/platform=tvOS"
+          testDestination: "platform=tvOS Simulator,name=Apple TV 4K (3rd generation),OS=latest"
+          testEnvironment: tvOS Simulator
+        - name: watchOS
+          buildDestination: "generic/platform=watchOS"
+          testDestination: "platform=watchOS Simulator,name=Apple Watch Ultra 3 (49mm),OS=latest"
+          testEnvironment: watchOS Simulator
+        - name: visionOS
+          buildDestination: "generic/platform=visionOS"
+          testDestination: "platform=visionOS Simulator,name=Apple Vision Pro,OS=latest"
+          testEnvironment: visionOS Simulator
+    runs-on: ${{ matrix.xcode.os }}
     steps:
     - uses: actions/checkout@v7
     - name: Set the Xcode version
-      run: xcodes select ${{ matrix.xcodeVersion }}
+      run: xcodes select ${{ matrix.xcode.version }}
     - name: Version information
       run: swift --version
     - name: List schemes
@@ -32,15 +54,24 @@ jobs:
         default=$(echo $scheme_list | ruby -e "require 'json'; puts JSON.parse(STDIN.gets)['workspace']['schemes'][0]")
         echo Using default scheme: $default
         echo "scheme=$default" >> $GITHUB_OUTPUT
-    - name: Build for testing
+    - name: Build for ${{ matrix.destination.name }} device
+      if: matrix.destination.buildDestination
       run: |
         build_settings=()
-        if [[ "${{ matrix.xcodeVersion }}" == 27.* ]]; then
+        if [[ "${{ matrix.xcode.version }}" == 27.* ]]; then
           build_settings+=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) OS_27')
         fi
-        xcodebuild build-for-testing \
+        xcodebuild build \
           -scheme "${{ steps.set-scheme.outputs.scheme }}" \
-          -destination "platform=macOS,arch=arm64" \
+          -destination "${{ matrix.destination.buildDestination }}" \
           "${build_settings[@]}"
-    - name: Run tests
-      run: xcodebuild test-without-building -scheme "${{ steps.set-scheme.outputs.scheme }}" -destination "platform=macOS,arch=arm64"
+    - name: Test on ${{ matrix.destination.testEnvironment }}
+      run: |
+        build_settings=()
+        if [[ "${{ matrix.xcode.version }}" == 27.* ]]; then
+          build_settings+=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) OS_27')
+        fi
+        xcodebuild test \
+          -scheme "${{ steps.set-scheme.outputs.scheme }}" \
+          -destination "${{ matrix.destination.testDestination }}" \
+          "${build_settings[@]}"
